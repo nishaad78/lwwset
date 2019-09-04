@@ -33,7 +33,6 @@ func (s *LWW) Remove(e interface{}, t time.Time) {
 // returned bool is false if element is not a member of the set
 func (s *LWW) Lookup(e interface{}) (time.Time, bool) {
 	t, ok := s.a.lookup(e)
-	removeT, removeOk := s.r.lookup(e)
 
 	// first check if the element is in add set
 	if ok == false {
@@ -41,12 +40,10 @@ func (s *LWW) Lookup(e interface{}) (time.Time, bool) {
 	}
 
 	// now check if element exists in remove set and compare the timestamps
-	if removeOk == true {
-		timeDiff := removeT.Sub(t)
-		if timeDiff >= 0 {
-			// using remove bias for this implementation
-			return time.Time{}, false
-		}
+	removeT, removeOk := s.r.lookup(e)
+	if removeOk == true && removeT.Sub(t) >= 0 {
+		// biased towards removals for this implementation
+		return time.Time{}, false
 	}
 	return t, true
 }

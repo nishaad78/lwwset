@@ -9,7 +9,7 @@ import (
 
 func TestLWWBasicAddRemove(t *testing.T) {
 	s := NewLWW()
-	v, ok := s.Lookup("empty")
+	v, ok := s.Lookup('a')
 	require.False(t, ok)
 	require.Equal(t, time.Time{}, v)
 
@@ -33,6 +33,18 @@ func TestLWWBasicAddRemove(t *testing.T) {
 	v, ok = s.Lookup('a')
 	require.True(t, ok)
 	require.Equal(t, now, v)
+}
+
+func TestLWWRemoveBias(t *testing.T) {
+	s := NewLWW()
+
+	// add and remove 'a'
+	now := time.Now()
+	s.Add('a', now)
+	s.Remove('a', now)
+	v, ok := s.Lookup('a')
+	require.False(t, ok)
+	require.Equal(t, time.Time{}, v)
 }
 
 func TestLWWEqual(t *testing.T) {
