@@ -7,7 +7,7 @@
 # lwwset
 This is a thread safe implementation of a [Last-Write-Wins-Element-Set](https://en.wikipedia.org/wiki/Conflict-free_replicated_data_type#LWW-Element-Set_(Last-Write-Wins-Element-Set)) with a bias towards removals.
 
-# Example usage
+## Example usage
 ```go
 s := lwwset.NewLWW()
 
