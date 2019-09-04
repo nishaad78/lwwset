@@ -1,14 +1,13 @@
 language: go
 
 go:
-  - "1.12"
   - "1.13"
   - master
 
 script:
   - go get -u golang.org/x/lint/golint
   - golint
-  - go test -race -coverprofile=coverage.txt -covermode=atomic
+  - GO111MODULE=on go test -race -coverprofile=coverage.txt -covermode=atomic
    
 after_success:
   - bash <(curl -s https://codecov.io/bash)
