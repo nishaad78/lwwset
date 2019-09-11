@@ -120,7 +120,7 @@ func (s *LWW) Merge(new *LWW) {
 	}
 }
 
-// latestTime is a helper to return the latestTime time
+// latestTime is a helper to return the latest time
 func latestTime(a time.Time, b time.Time) time.Time {
 	if a.Sub(b) < 0 {
 		return b
