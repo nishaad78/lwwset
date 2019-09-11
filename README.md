@@ -9,12 +9,12 @@ This is a thread safe implementation of a [Last-Write-Wins-Element-Set](https://
 
 ## Example usage
 ```go
-s := lwwset.NewLWW()
+s := lwwset.New()
 
-s.Add('a', time.Now())
+s.Add('a')
 
-t, ok := s.Lookup('a')
+ok := s.Lookup('a')
 if ok {
-    fmt.Println("we found it at ", t)
+    fmt.Println("we found it in the set")
 }
 ```

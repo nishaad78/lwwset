@@ -8,43 +8,33 @@ import (
 )
 
 func TestLWWBasicAddRemove(t *testing.T) {
-	s := NewLWW()
-	v, ok := s.Lookup('a')
+	s := New()
+	ok := s.Lookup('a')
 	require.False(t, ok)
-	require.Equal(t, time.Time{}, v)
 
 	// add 'a'
-	now := time.Now()
-	s.Add('a', now)
-	v, ok = s.Lookup('a')
+	s.Add('a')
+	ok = s.Lookup('a')
 	require.True(t, ok)
-	require.Equal(t, now, v)
 
 	// remove 'a'
-	now = time.Now()
-	s.Remove('a', now)
-	v, ok = s.Lookup('a')
+	s.Remove('a')
+	ok = s.Lookup('a')
 	require.False(t, ok)
-	require.Equal(t, time.Time{}, v)
 
 	// add 'a' again
-	now = time.Now()
-	s.Add('a', now)
-	v, ok = s.Lookup('a')
+	s.Add('a')
+	ok = s.Lookup('a')
 	require.True(t, ok)
-	require.Equal(t, now, v)
 }
 
 func TestLWWRemoveBias(t *testing.T) {
-	s := NewLWW()
-
-	// add and remove 'a'
 	now := time.Now()
-	s.Add('a', now)
-	s.Remove('a', now)
-	v, ok := s.Lookup('a')
+	// add and remove 'a' at the same time
+	m := LWWElements{'a': LWWTime{now, now}}
+	s := NewFromElements(m)
+	ok := s.Lookup('a')
 	require.False(t, ok)
-	require.Equal(t, time.Time{}, v)
 }
 
 func TestLWWEqual(t *testing.T) {
@@ -55,47 +45,50 @@ func TestLWWEqual(t *testing.T) {
 		expected bool
 	}{
 		{
-			name: "empty",
-			a: &LWW{
-				a: &g{m: map[interface{}]time.Time{}},
-				r: &g{m: map[interface{}]time.Time{}},
-			},
-			b: &LWW{
-				a: &g{m: map[interface{}]time.Time{}},
-				r: &g{m: map[interface{}]time.Time{}},
-			},
+			name:     "empty",
+			a:        &LWW{},
+			b:        &LWW{},
 			expected: true,
 		},
 		{
 			name: "one element equal",
-			a: &LWW{
-				a: &g{m: map[interface{}]time.Time{
-					'a': time.Unix(1567586021, 0),
-				}},
-				r: &g{m: map[interface{}]time.Time{}},
-			},
-			b: &LWW{
-				a: &g{m: map[interface{}]time.Time{
-					'a': time.Unix(1567586021, 0),
-				}},
-				r: &g{m: map[interface{}]time.Time{}},
-			},
+			a: &LWW{m: LWWElements{
+				'a': LWWTime{Add: time.Unix(1567586021, 0)},
+			}},
+			b: &LWW{m: LWWElements{
+				'a': LWWTime{Add: time.Unix(1567586021, 0)},
+			}},
 			expected: true,
 		},
 		{
+			name: "unequal length",
+			a: &LWW{m: LWWElements{
+				'a': LWWTime{Add: time.Unix(1567586021, 0)},
+			}},
+			b: &LWW{m: LWWElements{
+				'a': LWWTime{Add: time.Unix(1567586021, 0)},
+				'b': LWWTime{Add: time.Unix(1567586022, 0)},
+			}},
+			expected: false,
+		},
+		{
 			name: "one element unequal",
-			a: &LWW{
-				a: &g{m: map[interface{}]time.Time{
-					'a': time.Unix(1567586021, 0),
-				}},
-				r: &g{m: map[interface{}]time.Time{}},
-			},
-			b: &LWW{
-				a: &g{m: map[interface{}]time.Time{}},
-				r: &g{m: map[interface{}]time.Time{
-					'a': time.Unix(1567586021, 0),
-				}},
-			},
+			a: &LWW{m: LWWElements{
+				'a': LWWTime{Add: time.Unix(1567586021, 0)},
+			}},
+			b: &LWW{m: LWWElements{
+				'b': LWWTime{Add: time.Unix(1567586021, 0)},
+			}},
+			expected: false,
+		},
+		{
+			name: "one element unequal time",
+			a: &LWW{m: LWWElements{
+				'a': LWWTime{Add: time.Unix(1567586021, 0)},
+			}},
+			b: &LWW{m: LWWElements{
+				'a': LWWTime{Remove: time.Unix(1567586021, 0)},
+			}},
 			expected: false,
 		},
 	}
@@ -111,61 +104,42 @@ func TestLWWMerge(t *testing.T) {
 		name     string
 		a        *LWW
 		b        *LWW
-		expected *LWW
+		expected LWWElements
 	}{
 		{
 			name: "merge one",
-			a: &LWW{
-				a: &g{m: map[interface{}]time.Time{
-					'a': time.Unix(1567586021, 0),
-				}},
-				r: &g{m: map[interface{}]time.Time{}},
-			},
-			b: &LWW{
-				a: &g{m: map[interface{}]time.Time{
-					'b': time.Unix(1567586022, 0),
-				}},
-				r: &g{m: map[interface{}]time.Time{}},
-			},
-			expected: &LWW{
-				a: &g{m: map[interface{}]time.Time{
-					'a': time.Unix(1567586021, 0),
-					'b': time.Unix(1567586022, 0),
-				}},
-				r: &g{m: map[interface{}]time.Time{}},
+			a: &LWW{m: LWWElements{
+				'a': LWWTime{Add: time.Unix(1567586021, 0)},
+			}},
+			b: &LWW{m: LWWElements{
+				'b': LWWTime{Add: time.Unix(1567586022, 0)},
+			}},
+			expected: LWWElements{
+				'a': LWWTime{Add: time.Unix(1567586021, 0)},
+				'b': LWWTime{Add: time.Unix(1567586022, 0)},
 			},
 		},
 		{
 			name: "merge one with duplicate",
-			a: &LWW{
-				a: &g{m: map[interface{}]time.Time{
-					'a': time.Unix(1567586021, 0),
-				}},
-				r: &g{m: map[interface{}]time.Time{}},
-			},
-			b: &LWW{
-				a: &g{m: map[interface{}]time.Time{
-					'a': time.Unix(1567586021, 0),
-				}},
-				r: &g{m: map[interface{}]time.Time{
-					'b': time.Unix(1567586022, 0),
-				}},
-			},
-			expected: &LWW{
-				a: &g{m: map[interface{}]time.Time{
-					'a': time.Unix(1567586021, 0),
-				}},
-				r: &g{m: map[interface{}]time.Time{
-					'b': time.Unix(1567586022, 0),
-				}},
+			a: &LWW{m: LWWElements{
+				'a': LWWTime{Add: time.Unix(1567586021, 0)},
+				'b': LWWTime{Remove: time.Unix(1567586021, 0)},
+			}},
+			b: &LWW{m: LWWElements{
+				'a': LWWTime{Add: time.Unix(1567586021, 0)},
+				'b': LWWTime{Remove: time.Unix(1567586022, 0)},
+			}},
+			expected: LWWElements{
+				'a': LWWTime{Add: time.Unix(1567586021, 0)},
+				'b': LWWTime{Remove: time.Unix(1567586022, 0)},
 			},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			tt.a.Merge(tt.b)
-			require.EqualValues(t, tt.expected.a, tt.a.a)
-			require.EqualValues(t, tt.expected.r, tt.a.r)
+			require.EqualValues(t, tt.expected, tt.a.m)
+			require.EqualValues(t, tt.expected, tt.a.m)
 		})
 	}
 }
