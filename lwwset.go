@@ -14,7 +14,7 @@ type LWW struct {
 // Elements stores all the elements in the lww set
 type Elements map[interface{}]ElementState
 
-// ElementState stores the element state and the last modified time
+// ElementState stores the element state and the last modified time (in nanoseconds)
 type ElementState struct {
 	IsRemoved bool
 	UpdatedAt int64
