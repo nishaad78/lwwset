@@ -14,7 +14,7 @@ type LWW struct {
 // Elements stores all the elements in the lww set
 type Elements map[interface{}]ElementState
 
-// ElementState stores the add and remove times of the lww element
+// ElementState stores the element state and the last modified time
 type ElementState struct {
 	IsRemoved bool
 	UpdatedAt int64
@@ -30,7 +30,7 @@ func New() *LWW {
 // NewFromElements returns a new LWW initialised with the provided elements
 func NewFromElements(m Elements) *LWW {
 	return &LWW{
-		m: copyElemnts(m),
+		m: copyElements(m),
 	}
 }
 
@@ -39,7 +39,7 @@ func (s *LWW) Elements() Elements {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	return copyElemnts(s.m)
+	return copyElements(s.m)
 }
 
 // Add inserts an element into the set
@@ -114,13 +114,14 @@ func (s *LWW) Merge(new *LWW) {
 		} else if t.UpdatedAt > t2.UpdatedAt {
 			s.m[e] = t
 		} else if t.UpdatedAt == t2.UpdatedAt && t.IsRemoved {
+			// biased towards removals
 			s.m[e] = t
 		}
 	}
 }
 
-// copyElemnts is a helper to deep copy LWWElements
-func copyElemnts(m Elements) Elements {
+// copyElements is a helper to deep copy LWWElements
+func copyElements(m Elements) Elements {
 	new := make(Elements, len(m))
 	for e, t := range m {
 		new[e] = t
