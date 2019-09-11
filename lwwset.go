@@ -94,7 +94,7 @@ func (s *LWW) Equal(new *LWW) bool {
 		t2, ok := b[e]
 		if !ok ||
 			t.IsRemoved != t2.IsRemoved ||
-			t.UpdatedAt != t.UpdatedAt {
+			t.UpdatedAt != t2.UpdatedAt {
 			return false
 		}
 	}
