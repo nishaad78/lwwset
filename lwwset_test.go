@@ -29,11 +29,21 @@ func TestLWWBasicAddRemove(t *testing.T) {
 }
 
 func TestLWWRemoveBias(t *testing.T) {
-	now := time.Now()
-	// add and remove 'a' at the same time
-	m := LWWElements{'a': LWWTime{now, now}}
-	s := NewFromElements(m)
+	now := time.Now().UnixNano()
+
+	s := NewFromElements(Elements{'a': ElementState{
+		IsRemoved: false,
+		UpdatedAt: now,
+	}})
 	ok := s.Lookup('a')
+	require.True(t, ok)
+
+	s2 := NewFromElements(Elements{'a': ElementState{
+		IsRemoved: true,
+		UpdatedAt: now,
+	}})
+	s.Merge(s2)
+	ok = s.Lookup('a')
 	require.False(t, ok)
 }
 
@@ -52,42 +62,52 @@ func TestLWWEqual(t *testing.T) {
 		},
 		{
 			name: "one element equal",
-			a: &LWW{m: LWWElements{
-				'a': LWWTime{Add: time.Unix(1567586021, 0)},
+			a: &LWW{m: Elements{
+				'a': ElementState{UpdatedAt: 1567586021000000000},
 			}},
-			b: &LWW{m: LWWElements{
-				'a': LWWTime{Add: time.Unix(1567586021, 0)},
+			b: &LWW{m: Elements{
+				'a': ElementState{UpdatedAt: 1567586021000000000},
 			}},
 			expected: true,
 		},
 		{
 			name: "unequal length",
-			a: &LWW{m: LWWElements{
-				'a': LWWTime{Add: time.Unix(1567586021, 0)},
+			a: &LWW{m: Elements{
+				'a': ElementState{UpdatedAt: 1567586021000000000},
 			}},
-			b: &LWW{m: LWWElements{
-				'a': LWWTime{Add: time.Unix(1567586021, 0)},
-				'b': LWWTime{Add: time.Unix(1567586022, 0)},
+			b: &LWW{m: Elements{
+				'a': ElementState{UpdatedAt: 1567586021000000000},
+				'b': ElementState{UpdatedAt: 1567586022000000000},
 			}},
 			expected: false,
 		},
 		{
-			name: "one element unequal",
-			a: &LWW{m: LWWElements{
-				'a': LWWTime{Add: time.Unix(1567586021, 0)},
+			name: "one element unequal values",
+			a: &LWW{m: Elements{
+				'a': ElementState{UpdatedAt: 1567586021000000000},
 			}},
-			b: &LWW{m: LWWElements{
-				'b': LWWTime{Add: time.Unix(1567586021, 0)},
+			b: &LWW{m: Elements{
+				'b': ElementState{UpdatedAt: 1567586021000000000},
 			}},
 			expected: false,
 		},
 		{
 			name: "one element unequal time",
-			a: &LWW{m: LWWElements{
-				'a': LWWTime{Add: time.Unix(1567586021, 0)},
+			a: &LWW{m: Elements{
+				'a': ElementState{UpdatedAt: 1567586021000000000},
 			}},
-			b: &LWW{m: LWWElements{
-				'a': LWWTime{Remove: time.Unix(1567586021, 0)},
+			b: &LWW{m: Elements{
+				'a': ElementState{UpdatedAt: 1567586022000000000},
+			}},
+			expected: false,
+		},
+		{
+			name: "one element unequal state",
+			a: &LWW{m: Elements{
+				'a': ElementState{UpdatedAt: 1567586021000000000},
+			}},
+			b: &LWW{m: Elements{
+				'a': ElementState{IsRemoved: true, UpdatedAt: 1567586021000000000},
 			}},
 			expected: false,
 		},
@@ -104,34 +124,34 @@ func TestLWWMerge(t *testing.T) {
 		name     string
 		a        *LWW
 		b        *LWW
-		expected LWWElements
+		expected Elements
 	}{
 		{
 			name: "merge one",
-			a: &LWW{m: LWWElements{
-				'a': LWWTime{Add: time.Unix(1567586021, 0)},
+			a: &LWW{m: Elements{
+				'a': ElementState{UpdatedAt: 1567586021000000000},
 			}},
-			b: &LWW{m: LWWElements{
-				'b': LWWTime{Add: time.Unix(1567586022, 0)},
+			b: &LWW{m: Elements{
+				'b': ElementState{UpdatedAt: 1567586022000000000},
 			}},
-			expected: LWWElements{
-				'a': LWWTime{Add: time.Unix(1567586021, 0)},
-				'b': LWWTime{Add: time.Unix(1567586022, 0)},
+			expected: Elements{
+				'a': ElementState{UpdatedAt: 1567586021000000000},
+				'b': ElementState{UpdatedAt: 1567586022000000000},
 			},
 		},
 		{
 			name: "merge one with duplicate",
-			a: &LWW{m: LWWElements{
-				'a': LWWTime{Add: time.Unix(1567586021, 0)},
-				'b': LWWTime{Remove: time.Unix(1567586021, 0)},
+			a: &LWW{m: Elements{
+				'a': ElementState{UpdatedAt: 1567586021000000000},
+				'b': ElementState{IsRemoved: true, UpdatedAt: 1567586021000000000},
 			}},
-			b: &LWW{m: LWWElements{
-				'a': LWWTime{Add: time.Unix(1567586021, 0)},
-				'b': LWWTime{Remove: time.Unix(1567586022, 0)},
+			b: &LWW{m: Elements{
+				'a': ElementState{UpdatedAt: 1567586021000000000},
+				'b': ElementState{IsRemoved: true, UpdatedAt: 1567586022000000000},
 			}},
-			expected: LWWElements{
-				'a': LWWTime{Add: time.Unix(1567586021, 0)},
-				'b': LWWTime{Remove: time.Unix(1567586022, 0)},
+			expected: Elements{
+				'a': ElementState{UpdatedAt: 1567586021000000000},
+				'b': ElementState{IsRemoved: true, UpdatedAt: 1567586022000000000},
 			},
 		},
 	}

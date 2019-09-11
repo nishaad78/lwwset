@@ -8,34 +8,34 @@ import (
 // LWW is a thread safe LWW-Element-Set
 type LWW struct {
 	mu sync.RWMutex
-	m  LWWElements
+	m  Elements
 }
 
-// LWWElements stores all the elements in the lww set
-type LWWElements map[interface{}]LWWTime
+// Elements stores all the elements in the lww set
+type Elements map[interface{}]ElementState
 
-// LWWTime stores the add and remove times of the lww element
-type LWWTime struct {
-	Add    time.Time
-	Remove time.Time
+// ElementState stores the add and remove times of the lww element
+type ElementState struct {
+	IsRemoved bool
+	UpdatedAt int64
 }
 
 // New returns a new LWW
 func New() *LWW {
 	return &LWW{
-		m: make(LWWElements),
+		m: make(Elements),
 	}
 }
 
 // NewFromElements returns a new LWW initialised with the provided elements
-func NewFromElements(m LWWElements) *LWW {
+func NewFromElements(m Elements) *LWW {
 	return &LWW{
 		m: copyElemnts(m),
 	}
 }
 
 // Elements returs a copy of the elements currently in LWW
-func (s *LWW) Elements() LWWElements {
+func (s *LWW) Elements() Elements {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -48,7 +48,11 @@ func (s *LWW) Add(e interface{}) {
 	defer s.mu.Unlock()
 
 	t := s.m[e]
-	t.Add = latestTime(t.Add, time.Now())
+	now := time.Now().UnixNano()
+	if now > t.UpdatedAt {
+		t.UpdatedAt = now
+		t.IsRemoved = false
+	}
 	s.m[e] = t
 }
 
@@ -58,27 +62,22 @@ func (s *LWW) Remove(e interface{}) {
 	defer s.mu.Unlock()
 
 	t := s.m[e]
-	t.Remove = latestTime(t.Remove, time.Now())
+	now := time.Now().UnixNano()
+	if now >= t.UpdatedAt {
+		// biased towards removals for this implementation
+		t.UpdatedAt = now
+		t.IsRemoved = true
+	}
 	s.m[e] = t
 }
 
 // Lookup checks if an element is a member of lww set
 func (s *LWW) Lookup(e interface{}) bool {
 	s.mu.RLock()
+	defer s.mu.RUnlock()
+
 	t, ok := s.m[e]
-	s.mu.RUnlock()
-
-	// first check if the element is in add set
-	if ok == false {
-		return false
-	}
-
-	// now compare add and remove times
-	if t.Remove.Sub(t.Add) >= 0 {
-		// biased towards removals for this implementation
-		return false
-	}
-	return true
+	return ok && t.IsRemoved == false
 }
 
 // Equal checks whether or not two sets are equal
@@ -94,8 +93,8 @@ func (s *LWW) Equal(new *LWW) bool {
 	for e, t := range a {
 		t2, ok := b[e]
 		if !ok ||
-			!t.Add.Equal(t2.Add) ||
-			!t.Remove.Equal(t2.Remove) {
+			t.IsRemoved != t2.IsRemoved ||
+			t.UpdatedAt != t.UpdatedAt {
 			return false
 		}
 	}
@@ -112,25 +111,17 @@ func (s *LWW) Merge(new *LWW) {
 		t2, ok := s.m[e]
 		if !ok {
 			s.m[e] = t
-		} else {
-			t.Add = latestTime(t.Add, t2.Add)
-			t.Remove = latestTime(t.Remove, t2.Remove)
+		} else if t.UpdatedAt > t2.UpdatedAt {
+			s.m[e] = t
+		} else if t.UpdatedAt == t2.UpdatedAt && t.IsRemoved {
 			s.m[e] = t
 		}
 	}
 }
 
-// latestTime is a helper to return the latest time
-func latestTime(a time.Time, b time.Time) time.Time {
-	if a.Sub(b) < 0 {
-		return b
-	}
-	return a
-}
-
 // copyElemnts is a helper to deep copy LWWElements
-func copyElemnts(m LWWElements) LWWElements {
-	new := make(LWWElements, len(m))
+func copyElemnts(m Elements) Elements {
+	new := make(Elements, len(m))
 	for e, t := range m {
 		new[e] = t
 	}
