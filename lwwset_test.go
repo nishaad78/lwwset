@@ -31,14 +31,14 @@ func TestLWWBasicAddRemove(t *testing.T) {
 func TestLWWRemoveBias(t *testing.T) {
 	now := time.Now().UnixNano()
 
-	s := NewFromElementsMap(Elements{'a': ElementState{
+	s := NewFromMap(Elements{'a': ElementState{
 		IsRemoved: false,
 		UpdatedAt: now,
 	}})
 	ok := s.Lookup('a')
 	require.True(t, ok)
 
-	s2 := NewFromElementsMap(Elements{'a': ElementState{
+	s2 := NewFromMap(Elements{'a': ElementState{
 		IsRemoved: true,
 		UpdatedAt: now,
 	}})
