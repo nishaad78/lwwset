@@ -31,20 +31,61 @@ func TestLWWBasicAddRemove(t *testing.T) {
 func TestLWWRemoveBias(t *testing.T) {
 	now := time.Now().UnixNano()
 
-	s := NewFromElements(Elements{'a': ElementState{
+	s := NewFromElementsMap(Elements{'a': ElementState{
 		IsRemoved: false,
 		UpdatedAt: now,
 	}})
 	ok := s.Lookup('a')
 	require.True(t, ok)
 
-	s2 := NewFromElements(Elements{'a': ElementState{
+	s2 := NewFromElementsMap(Elements{'a': ElementState{
 		IsRemoved: true,
 		UpdatedAt: now,
 	}})
 	s.Merge(s2)
 	ok = s.Lookup('a')
 	require.False(t, ok)
+}
+
+func TestLWWElements(t *testing.T) {
+	var tests = []struct {
+		name     string
+		a        *LWW
+		expected []interface{}
+	}{
+		{
+			name:     "empty",
+			a:        &LWW{},
+			expected: []interface{}{},
+		},
+		{
+			name: "one elements, one valid",
+			a: &LWW{m: Elements{
+				'a': ElementState{UpdatedAt: 1567586021000000000},
+			}},
+			expected: []interface{}{'a'},
+		},
+		{
+			name: "two elements, one valid",
+			a: &LWW{m: Elements{
+				'a': ElementState{UpdatedAt: 1567586021000000000},
+				'b': ElementState{IsRemoved: true, UpdatedAt: 1567586021000000000},
+			}},
+			expected: []interface{}{'a'},
+		},
+		{
+			name: "one elements, none valid",
+			a: &LWW{m: Elements{
+				'a': ElementState{IsRemoved: true, UpdatedAt: 1567586021000000000},
+			}},
+			expected: []interface{}{},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			require.EqualValues(t, tt.expected, tt.a.Elements())
+		})
+	}
 }
 
 func TestLWWEqual(t *testing.T) {

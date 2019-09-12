@@ -27,15 +27,15 @@ func New() *LWW {
 	}
 }
 
-// NewFromElements returns a new LWW initialised with the provided elements
-func NewFromElements(m Elements) *LWW {
+// NewFromMap returns a new LWW initialised with the provided elements
+func NewFromMap(m Elements) *LWW {
 	return &LWW{
 		m: copyElements(m),
 	}
 }
 
-// Elements returs a copy of the elements currently in LWW
-func (s *LWW) Elements() Elements {
+// Map returs a copy of the elements currently in LWW
+func (s *LWW) Map() Elements {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -45,9 +45,9 @@ func (s *LWW) Elements() Elements {
 // Add inserts an element into the set
 func (s *LWW) Add(e interface{}) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	t := s.m[e]
+	s.mu.Unlock()
+
 	now := time.Now().UnixNano()
 	if now > t.UpdatedAt {
 		t.UpdatedAt = now
@@ -59,9 +59,9 @@ func (s *LWW) Add(e interface{}) {
 // Remove removes an element from the set
 func (s *LWW) Remove(e interface{}) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	t := s.m[e]
+	s.mu.Unlock()
+
 	now := time.Now().UnixNano()
 	if now >= t.UpdatedAt {
 		// biased towards removals for this implementation
@@ -71,19 +71,34 @@ func (s *LWW) Remove(e interface{}) {
 	s.m[e] = t
 }
 
-// Lookup checks if an element is a member of lww set
+// Lookup checks if an element is a member of the set
 func (s *LWW) Lookup(e interface{}) bool {
+	s.mu.RLock()
+	t, ok := s.m[e]
+	s.mu.RUnlock()
+
+	return ok && t.IsRemoved == false
+}
+
+// Elements returns a list of all the valid members of the set
+func (s *LWW) Elements() []interface{} {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	t, ok := s.m[e]
-	return ok && t.IsRemoved == false
+	res := []interface{}{}
+	for e, t := range s.m {
+		if t.IsRemoved == false {
+			res = append(res, e)
+		}
+	}
+
+	return res
 }
 
 // Equal checks whether or not two sets are equal
 func (s *LWW) Equal(new *LWW) bool {
-	a := s.Elements()
-	b := new.Elements()
+	a := s.Map()
+	b := new.Map()
 
 	if len(a) != len(b) {
 		return false
@@ -107,7 +122,7 @@ func (s *LWW) Merge(new *LWW) {
 	defer s.mu.Unlock()
 
 	// merge each element
-	for e, t := range new.Elements() {
+	for e, t := range new.Map() {
 		t2, ok := s.m[e]
 		if !ok {
 			s.m[e] = t
