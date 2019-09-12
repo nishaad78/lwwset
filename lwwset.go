@@ -1,60 +1,145 @@
 package lwwset
 
 import (
+	"sync"
 	"time"
 )
 
 // LWW is a thread safe LWW-Element-Set
 type LWW struct {
-	a *g
-	r *g
+	mu sync.RWMutex
+	m  Elements
 }
 
-// NewLWW returns a new LWW
-func NewLWW() *LWW {
-	s := &LWW{
-		a: newG(),
-		r: newG(),
+// Elements stores all the elements in the lww set
+type Elements map[interface{}]ElementState
+
+// ElementState stores the element state and the last modified time (in nanoseconds)
+type ElementState struct {
+	IsRemoved bool
+	UpdatedAt int64
+}
+
+// New returns a new LWW
+func New() *LWW {
+	return &LWW{
+		m: make(Elements),
 	}
-	return s
+}
+
+// NewFromMap returns a new LWW initialised with the provided elements
+func NewFromMap(m Elements) *LWW {
+	return &LWW{
+		m: copyElements(m),
+	}
+}
+
+// Map returs a copy of the elements currently in LWW
+func (s *LWW) Map() Elements {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	return copyElements(s.m)
 }
 
 // Add inserts an element into the set
-func (s *LWW) Add(e interface{}, t time.Time) {
-	s.a.add(e, t)
+func (s *LWW) Add(e interface{}) {
+	s.mu.Lock()
+	t := s.m[e]
+	s.mu.Unlock()
+
+	now := time.Now().UnixNano()
+	if now > t.UpdatedAt {
+		t.UpdatedAt = now
+		t.IsRemoved = false
+	}
+	s.m[e] = t
 }
 
 // Remove removes an element from the set
-func (s *LWW) Remove(e interface{}, t time.Time) {
-	s.r.add(e, t)
+func (s *LWW) Remove(e interface{}) {
+	s.mu.Lock()
+	t := s.m[e]
+	s.mu.Unlock()
+
+	now := time.Now().UnixNano()
+	if now >= t.UpdatedAt {
+		// biased towards removals for this implementation
+		t.UpdatedAt = now
+		t.IsRemoved = true
+	}
+	s.m[e] = t
 }
 
-// Lookup checks if an element is a member of lww set and returns latest recorded time
-// returned bool is false if element is not a member of the set
-func (s *LWW) Lookup(e interface{}) (time.Time, bool) {
-	t, ok := s.a.lookup(e)
+// Lookup checks if an element is a member of the set
+func (s *LWW) Lookup(e interface{}) bool {
+	s.mu.RLock()
+	t, ok := s.m[e]
+	s.mu.RUnlock()
 
-	// first check if the element is in add set
-	if ok == false {
-		return t, false
+	return ok && t.IsRemoved == false
+}
+
+// Elements returns a list of all the valid members of the set
+func (s *LWW) Elements() []interface{} {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	res := []interface{}{}
+	for e, t := range s.m {
+		if t.IsRemoved == false {
+			res = append(res, e)
+		}
 	}
 
-	// now check if element exists in remove set and compare the timestamps
-	removeT, removeOk := s.r.lookup(e)
-	if removeOk == true && removeT.Sub(t) >= 0 {
-		// biased towards removals for this implementation
-		return time.Time{}, false
-	}
-	return t, true
+	return res
 }
 
 // Equal checks whether or not two sets are equal
 func (s *LWW) Equal(new *LWW) bool {
-	return s.a.equal(new.a) && s.r.equal(new.r)
+	a := s.Map()
+	b := new.Map()
+
+	if len(a) != len(b) {
+		return false
+	}
+
+	// compare each element
+	for e, t := range a {
+		t2, ok := b[e]
+		if !ok ||
+			t.IsRemoved != t2.IsRemoved ||
+			t.UpdatedAt != t2.UpdatedAt {
+			return false
+		}
+	}
+	return true
 }
 
 // Merge merges new into s
 func (s *LWW) Merge(new *LWW) {
-	s.a.merge(new.a)
-	s.r.merge(new.r)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// merge each element
+	for e, t := range new.Map() {
+		t2, ok := s.m[e]
+		if !ok {
+			s.m[e] = t
+		} else if t.UpdatedAt > t2.UpdatedAt {
+			s.m[e] = t
+		} else if t.UpdatedAt == t2.UpdatedAt && t.IsRemoved {
+			// biased towards removals
+			s.m[e] = t
+		}
+	}
+}
+
+// copyElements is a helper to deep copy LWWElements
+func copyElements(m Elements) Elements {
+	new := make(Elements, len(m))
+	for e, t := range m {
+		new[e] = t
+	}
+	return new
 }
