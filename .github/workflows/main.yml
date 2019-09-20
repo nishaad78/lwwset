@@ -1,6 +1,6 @@
 name: CI
 
-on: [push]
+on: [push, pull_request]
 
 jobs:
   test:
@@ -12,16 +12,18 @@ jobs:
     steps:
     - uses: actions/checkout@v1
     
-    - name: Test with go ${{ matrix.go }}
+    - name: use go ${{ matrix.go }}
       uses: actions/setup-go@v1
       with:
         go-version: ${{ matrix.go }}
+
+    - name: lint and test
       run: |
         go get -u golang.org/x/lint/golint
         golint
         go test -race -coverprofile=coverage.txt -covermode=atomic
     
-    - name: Coverage
+    - name: coverage
       uses: codecov/codecov-action@v1
       with:
         token: ${{secrets.CODECOV_TOKEN}}
