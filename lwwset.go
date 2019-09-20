@@ -45,9 +45,9 @@ func (s *LWW) Map() Elements {
 // Add inserts an element into the set
 func (s *LWW) Add(e interface{}) {
 	s.mu.Lock()
-	t := s.m[e]
-	s.mu.Unlock()
+	defer s.mu.Unlock()
 
+	t := s.m[e]
 	now := time.Now().UnixNano()
 	if now > t.UpdatedAt {
 		t.UpdatedAt = now
@@ -59,9 +59,9 @@ func (s *LWW) Add(e interface{}) {
 // Remove removes an element from the set
 func (s *LWW) Remove(e interface{}) {
 	s.mu.Lock()
-	t := s.m[e]
-	s.mu.Unlock()
+	defer s.mu.Unlock()
 
+	t := s.m[e]
 	now := time.Now().UnixNano()
 	if now >= t.UpdatedAt {
 		// biased towards removals for this implementation

@@ -1,13 +1,14 @@
 package lwwset
 
 import (
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
 )
 
-func TestLWWBasicAddRemove(t *testing.T) {
+func TestBasicAddRemove(t *testing.T) {
 	s := New()
 	ok := s.Lookup('a')
 	require.False(t, ok)
@@ -28,7 +29,26 @@ func TestLWWBasicAddRemove(t *testing.T) {
 	require.True(t, ok)
 }
 
-func TestLWWRemoveBias(t *testing.T) {
+func TestConcurrentAddRemove(t *testing.T) {
+	s := New()
+	require.False(t, s.Lookup('a'))
+
+	wg := sync.WaitGroup{}
+	wg.Add(1000)
+	for i := 0; i < 1000; i++ {
+		go func() {
+			s.Add('a')
+			s.Remove('a')
+			wg.Done()
+		}()
+	}
+	wg.Wait()
+	require.False(t, s.Lookup('a'))
+	s.Add('a')
+	require.True(t, s.Lookup('a'))
+}
+
+func TestRemoveBias(t *testing.T) {
 	now := time.Now().UnixNano()
 
 	s := NewFromMap(Elements{'a': ElementState{
@@ -47,7 +67,7 @@ func TestLWWRemoveBias(t *testing.T) {
 	require.False(t, ok)
 }
 
-func TestLWWElements(t *testing.T) {
+func TestElements(t *testing.T) {
 	var tests = []struct {
 		name     string
 		a        *LWW
@@ -88,7 +108,7 @@ func TestLWWElements(t *testing.T) {
 	}
 }
 
-func TestLWWEqual(t *testing.T) {
+func TestEqual(t *testing.T) {
 	var tests = []struct {
 		name     string
 		a        *LWW
@@ -160,7 +180,7 @@ func TestLWWEqual(t *testing.T) {
 	}
 }
 
-func TestLWWMerge(t *testing.T) {
+func TestMerge(t *testing.T) {
 	var tests = []struct {
 		name     string
 		a        *LWW
