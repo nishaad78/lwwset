@@ -1,0 +1,28 @@
+name: CI
+
+on: [push]
+
+jobs:
+  test:
+    runs-on: debian-latest
+    strategy:
+      matrix:
+        go: [ '1.12', '1.13', 'master' ]
+        
+    steps:
+    - uses: actions/checkout@v1
+    
+    - name: Test with go ${{ matrix.go }}
+      uses: actions/setup-go@v1
+      with:
+        go-version: ${{ matrix.go }}
+      run: |
+        go get -u golang.org/x/lint/golint
+        golint
+        go test -race -coverprofile=coverage.txt -covermode=atomic
+    
+    - name: Coverage
+      uses: codecov/codecov-action@v1
+      with:
+        token: ${{secrets.CODECOV_TOKEN}}
+        file: ./coverage.txt
